@@ -1,0 +1,32 @@
+name: Ubuntu
+env:
+  APT_COMMAND: "sudo apt-get update && sudo apt-get install g++-10" # clang++-11
+on: [push, pull_request]
+jobs:
+  test:
+    name: "Unit tests"
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        build_type: ["Debug", "Release"]
+        compiler: ["g++-10"] #, "clang++-11"]
+    steps:
+      - name: Install dependencies
+        run: ${{ env.APT_COMMAND }}
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Configure
+        run: |
+          mkdir build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=matrix.build_type -DBUILD_TESTING=ON -DCMAKE_CXX_COMPILER=/usr/bin/${{ matrix.compiler }} ..
+      - name: Build tests
+        run: |
+          cd build
+          cmake --build . --target unit_tests
+      - name: Run tests
+        run: ./build/test/unit_tests

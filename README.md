@@ -1,3 +1,5 @@
+![CI](https://github.com/ckankare/TrivialThreadPool/workflows/Ubuntu/badge.svg)
+
 # Description
 A simple, straightforward and modern C++ thread pool implementation.
 
