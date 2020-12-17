@@ -1,6 +1,6 @@
 name: Ubuntu
 env:
-  APT_COMMAND: "sudo apt-get update && sudo apt-get install g++-10" # clang++-11
+  APT_COMMAND: "sudo apt-get update && sudo apt-get install gcovr g++-10" # clang++-11
 on: [push, pull_request]
 jobs:
   test:
@@ -30,3 +30,48 @@ jobs:
           cmake --build . --target unit_tests
       - name: Run tests
         run: ./build/test/unit_tests
+
+  coverage:
+    name: "Coverage"
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        build_type: ["Coverage"]
+        compiler: ["g++-10"]
+    steps:
+      - name: Install dependencies
+        run: ${{ env.APT_COMMAND }}
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Configure
+        run: |
+          mkdir build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DBUILD_TESTING=ON -DCMAKE_CXX_COMPILER=/usr/bin/${{ matrix.compiler }} ..
+      - name: Build tests
+        run: |
+          cd build
+          cmake --build . --target unit_tests
+      - name: Run tests
+        run: ./build/test/unit_tests
+
+      - name: Create coverage raport
+        run: |
+          gcovr -e'.*catch2.*' -e'.*test.*' -r . --xml > coverage.xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v1
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+
+      - name: Store coverage report
+        uses: actions/upload-artifact@v2
+        with:
+          name: coverage-report
+          path: ./coverage.xml

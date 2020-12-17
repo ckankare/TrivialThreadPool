@@ -122,7 +122,7 @@ public:
     }
 
     template <typename F, typename... Args>
-    auto async(F&& func, Args&&... args) {
+    auto async([[maybe_unused]] F&& func, [[maybe_unused]] Args&&... args) {
         static_assert(std::is_invocable_v<F, Args...>, "Couldn't deduce function");
     }
 

@@ -15,6 +15,18 @@ target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_20)
 
 option(BUILD_TESTING "Build tests" OFF)
 if(BUILD_TESTING)
+
+    target_compile_options(${PROJECT_NAME}
+        INTERFACE
+            $<$<CONFIG:COVERAGE>:--coverage -g -O0>
+    )
+
+    target_link_libraries(${PROJECT_NAME}
+        INTERFACE
+            $<$<CONFIG:COVERAGE>:--coverage>
+    )
+
     add_subdirectory(third_party/Catch2)
     add_subdirectory(test)
+
 endif()

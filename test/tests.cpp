@@ -25,13 +25,13 @@ TEST_CASE("Task returning movable-only type") {
     ttp::ThreadPool pool(10);
     int v1 = 13;
     auto f1 = pool.async([v1]() {
-        auto result = std::make_unique<int>(42);
+        auto result = std::make_unique<int>(42 * v1);
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         return result;
     });
 
     auto r1 = f1.get();
-    REQUIRE(*r1 == 42);
+    REQUIRE(*r1 == 42 * 13);
 }
 
 TEST_CASE("Free function") {
@@ -46,7 +46,6 @@ TEST_CASE("Free function") {
         auto value = futures[i].get();
         REQUIRE(value == i * 2 + 3);
     }
-    REQUIRE(pool.tasks() == 0);
 }
 
 TEST_CASE("Member function") {
