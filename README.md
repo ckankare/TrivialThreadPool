@@ -1,4 +1,5 @@
-![CI](https://github.com/ckankare/TrivialThreadPool/workflows/Ubuntu/badge.svg)
+[![Build Status](https://github.com/ckankare/TrivialThreadPool/workflows/Ubuntu/badge.svg)](https://github.com/ckankare/TrivialThreadPool)
+[![codecov](https://codecov.io/gh/ckankare/TrivialThreadPool/branch/main/graph/badge.svg)](https://codecov.io/gh/ckankare/TrivialThreadPool)
 
 # Description
 A simple, straightforward and modern C++ thread pool implementation.
