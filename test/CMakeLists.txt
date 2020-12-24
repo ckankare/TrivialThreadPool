@@ -2,7 +2,10 @@ cmake_minimum_required(VERSION 3.16)
 
 find_package(Threads)
 
-set(sources "tests.cpp")
+set(sources
+    "tests.cpp"
+    "tests_unique_function.cpp"
+)
 
 add_executable(unit_tests ${sources})
 

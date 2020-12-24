@@ -15,13 +15,14 @@ TEST_CASE("Task returning reference") {
         v1 += 10;
         return v1;
     });
+    v1 += 10;
 
     auto& r1 = f1.get();
     REQUIRE(&v1 == &r1);
-    REQUIRE(v1 == 28);
+    REQUIRE(v1 == 38);
 }
 
-TEST_CASE("Task returning movable-only type") {
+TEST_CASE("Task returning move-only type") {
     ttp::ThreadPool pool(10);
     int v1 = 13;
     auto f1 = pool.async([v1]() {
@@ -33,6 +34,17 @@ TEST_CASE("Task returning movable-only type") {
     auto r1 = f1.get();
     REQUIRE(*r1 == 42 * 13);
 }
+
+// TEST_CASE("Task taking move-only argument") {
+//     auto [task, future] =
+//         ttp::Task::create_task([](int a, std::unique_ptr<int> b) { return a * (*b); }, 12,
+//         std::make_unique<int>(11));
+
+//     task.try_run();
+
+//     auto r = future.get();
+//     REQUIRE(r == 132);
+// }
 
 TEST_CASE("Free function") {
     ttp::ThreadPool pool(10);
