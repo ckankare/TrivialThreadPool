@@ -61,7 +61,7 @@ jobs:
 
       - name: Create coverage raport
         run: |
-          gcovr -e'.*catch2.*' -e'.*test.*' -r . --xml > coverage.xml
+          gcovr -e'.*catch2.*' -e'.*tests.*' -r . --xml > coverage.xml
 
       - name: Upload coverage
         uses: codecov/codecov-action@v1

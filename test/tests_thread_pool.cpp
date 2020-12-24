@@ -6,46 +6,6 @@
 
 int func(int a, int b) { return 2 * a + b; }
 
-TEST_CASE("Task returning reference") {
-    ttp::ThreadPool pool(10);
-    int v1 = 13;
-    auto f1 = pool.async([&v1]() -> int& {
-        v1 += 5;
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        v1 += 10;
-        return v1;
-    });
-    v1 += 10;
-
-    auto& r1 = f1.get();
-    REQUIRE(&v1 == &r1);
-    REQUIRE(v1 == 38);
-}
-
-TEST_CASE("Task returning move-only type") {
-    ttp::ThreadPool pool(10);
-    int v1 = 13;
-    auto f1 = pool.async([v1]() {
-        auto result = std::make_unique<int>(42 * v1);
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        return result;
-    });
-
-    auto r1 = f1.get();
-    REQUIRE(*r1 == 42 * 13);
-}
-
-// TEST_CASE("Task taking move-only argument") {
-//     auto [task, future] =
-//         ttp::Task::create_task([](int a, std::unique_ptr<int> b) { return a * (*b); }, 12,
-//         std::make_unique<int>(11));
-
-//     task.try_run();
-
-//     auto r = future.get();
-//     REQUIRE(r == 132);
-// }
-
 TEST_CASE("Free function") {
     ttp::ThreadPool pool(10);
     std::vector<ttp::Future<int>> futures;
@@ -97,6 +57,76 @@ TEST_CASE("Member function") {
 
     REQUIRE(s1.a == 44);
     REQUIRE(s2.a == 34);
+}
+
+TEST_CASE("Task returning reference") {
+    ttp::ThreadPool pool(10);
+    int v1 = 13;
+    auto f1 = pool.async([&v1]() -> int& {
+        v1 += 5;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        v1 += 10;
+        return v1;
+    });
+    v1 += 10;
+
+    auto& r1 = f1.get();
+    REQUIRE(&v1 == &r1);
+    REQUIRE(v1 == 38);
+}
+
+TEST_CASE("Task returning void") {
+    ttp::ThreadPool pool(10);
+    int v1 = 13;
+    auto f1 = pool.async([&v1]() -> void {
+        v1 += 5;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        v1 += 10;
+    });
+    v1 += 10;
+
+    f1.get();
+    REQUIRE(v1 == 38);
+}
+
+TEST_CASE("Task returning move-only type") {
+    ttp::ThreadPool pool(10);
+    int v1 = 13;
+    auto f1 = pool.async([v1]() {
+        auto result = std::make_unique<int>(42 * v1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        return result;
+    });
+
+    auto r1 = f1.get();
+    REQUIRE(*r1 == 42 * 13);
+}
+
+TEST_CASE("Task taking move-only argument") {
+    ttp::ThreadPool pool(10);
+    auto func = [](std::unique_ptr<int> value) -> int {
+        auto result = 11 * (*value);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        return result;
+    };
+    auto f1 = pool.async(func, std::make_unique<int>(42));
+
+    auto r1 = f1.get();
+    REQUIRE(r1 == 42 * 11);
+
+    struct S {
+        std::unique_ptr<int> func(std::unique_ptr<int> a, int b) {
+            auto result = (*a) * b;
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            return std::make_unique<int>(result);
+        }
+    };
+    S s;
+
+    auto f2 = pool.async(&S::func, s, std::make_unique<int>(10), 12);
+
+    auto r2 = f2.get();
+    REQUIRE(*r2 == 10 * 12);
 }
 
 TEST_CASE("Async tasks") {

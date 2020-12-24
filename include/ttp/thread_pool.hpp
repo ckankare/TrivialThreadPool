@@ -10,24 +10,48 @@
 #include <thread>
 #include <vector>
 
+#include "unique_function.hpp"
+
 namespace ttp {
 
 enum class Wait { Async, Sync };
 
 namespace details {
+
     class Task {
     public:
         template <typename F, typename... Args>
         explicit Task(std::future<std::invoke_result_t<F, Args...>>& future, F&& func, Args&&... args) noexcept
             : m_ready(false) {
+            using result_t = std::invoke_result_t<F, Args...>;
             m_worked_on.clear();
 
-            // NOTE: MSVC bug which doesn't allow move a packged_task (or even unique_ptr) into a lambda.
-            auto task = std::make_shared<std::packaged_task<decltype(func(args...))()>>(
-                std::bind(std::forward<F>(func), std::forward<Args>(args)...));
-            future = task->get_future();
+            ttp::UniqueFunction<result_t()> task = [func = std::forward<F>(func),
+                                                    ... args = std::forward<Args>(args)]() mutable -> result_t {
+                // :NOTE For lower than C++20, args can be packed in a tuple instead
+                // 'args = std::make_tuple(std::forward<Args>(args)...)'
+                // and then used with 'std::apply'.
+                return std::invoke(func, std::forward<Args>(args)...);
+            };
 
-            m_task = std::packaged_task<void()>([task = std::move(task)]() mutable { (*task)(); });
+            std::promise<result_t> promise;
+            future = promise.get_future();
+
+            std::promise<void> task_barrier;
+            m_future = task_barrier.get_future();
+
+            // :TODO, Exceptions?
+            m_task = [task = std::move(task), promise = std::move(promise),
+                      task_barrier = std::move(task_barrier)]() mutable {
+                if constexpr (std::is_same_v<result_t, void>) {
+                    task();
+                    promise.set_value();
+                } else {
+                    promise.set_value(task());
+                }
+                task_barrier.set_value();
+            };
+
             assert(m_task.valid());
         }
 
@@ -40,14 +64,15 @@ namespace details {
             }
         }
 
+        inline void wait() const { m_future.wait(); }
+
         inline bool ready() const { return m_ready; }
 
     private:
         std::atomic_flag m_worked_on;
         std::atomic<bool> m_ready;
-        // The packed task can be changed to std::function + std::promise, would reduce
-        // some shared_ptr.
-        std::packaged_task<void()> m_task;
+        std::future<void> m_future;
+        ttp::UniqueFunction<void()> m_task;
     };
 } // namespace details
 
@@ -56,6 +81,9 @@ class Future {
 public:
     Future(Future&&) = default;
     Future& operator=(Future&&) = default;
+
+    Future(const Future&) = delete;
+    Future& operator=(const Future&) = delete;
 
     ~Future() = default;
 
@@ -101,7 +129,7 @@ public:
 
     template <typename F, typename T, typename... Args>
     auto async(F&& func, T& object, Args&&... args) -> Future<typename std::invoke_result_t<F, T*, Args...>> {
-        return async(std::bind(std::forward<F>(func), &object, std::forward<Args>(args)...));
+        return async(std::forward<F>(func), &object, std::forward<Args>(args)...);
     }
 
     template <typename F, typename... Args>
@@ -115,7 +143,6 @@ public:
 
             m_tasks.push(wrapped_task);
         }
-        std::future<int&> foo;
         m_work_condition.notify_one();
         auto wrapped_future = Future<result_t>(wrapped_task, std::move(future));
         return wrapped_future;

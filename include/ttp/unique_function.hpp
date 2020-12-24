@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <new>
 #include <type_traits>
@@ -15,7 +16,7 @@
 namespace ttp {
 
 namespace details {
-    void* aligned_alloc(std::size_t size, std::size_t align) {
+    inline void* aligned_alloc(std::size_t size, std::size_t align) {
 #if defined(_WIN32) || defined(__CYGWIN__)
         auto ptr = _aligned_malloc(size, align);
 #else
@@ -24,7 +25,7 @@ namespace details {
         return ptr;
     }
 
-    void aligned_free(void* ptr) {
+    inline void aligned_free(void* ptr) {
 #if defined(_WIN32) || defined(__CYGWIN__)
         _aligned_free(ptr);
 #else
@@ -143,7 +144,8 @@ namespace details {
 
     template <typename T, typename R, typename... Args>
     static R caller(void* instance, Args&&... args) {
-        return (*reinterpret_cast<T*>(instance))(std::forward<Args>(args)...);
+        T& call = *reinterpret_cast<T*>(instance);
+        return std::invoke(call, std::forward<Args>(args)...);
     }
 } // namespace details
 
@@ -167,6 +169,7 @@ public:
         m_valid = false;
         *this = std::move(rhs);
     }
+
     ErasuredType& operator=(ErasuredType&& rhs) {
         if (m_valid) {
             m_destroyer(m_storage.pointer());
@@ -211,6 +214,8 @@ public:
 
     const void* pointer() const { return m_storage.pointer(); }
 
+    bool valid() const { return m_valid; }
+
 private:
     bool m_valid;
     bool m_trivial;
@@ -232,6 +237,8 @@ class UniqueFunction<R(Args...)> {
 public:
     using call_t = R (*)(void* instance, Args&&... args);
 
+    UniqueFunction() = default;
+
     template <typename F>
     UniqueFunction(F&& func) : m_type_erasured(std::forward<F>(func)) {
         m_caller = &details::caller<F, R, Args...>; // :TODO Why can't we take address of std::invoke?
@@ -239,7 +246,12 @@ public:
     UniqueFunction(const UniqueFunction&) = delete;
     UniqueFunction& operator=(const UniqueFunction&) = delete;
 
+    UniqueFunction(UniqueFunction&&) = default;
+    UniqueFunction& operator=(UniqueFunction&&) = default;
+
     R operator()(Args&&... args) { return m_caller(m_type_erasured.pointer(), std::forward<Args>(args)...); }
+
+    bool valid() const { return m_type_erasured.valid(); }
 
 private:
     ErasuredType<sizeof(void*) * 4> m_type_erasured;

@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 find_package(Threads)
 
 set(sources
-    "tests.cpp"
+    "tests_thread_pool.cpp"
     "tests_unique_function.cpp"
 )
 

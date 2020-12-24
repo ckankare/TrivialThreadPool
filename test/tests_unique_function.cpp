@@ -3,52 +3,15 @@
 #include "ttp/unique_function.hpp"
 #include <array>
 #include <compare>
+#include <functional>
+
+namespace {
 
 struct S {
     uint64_t a;
     uint64_t b;
     friend auto operator<=>(const S&, const S&) = default;
 };
-
-TEST_CASE("Tests inlined data") {
-    ttp::Storage<4> s(static_cast<uint32_t>(123));
-    REQUIRE(s.is_inlined());
-    REQUIRE(s.cast<int32_t>() == 123);
-
-    auto s2 = std::move(s);
-    REQUIRE(s2.is_inlined());
-    REQUIRE(s2.cast<int32_t>() == 123);
-
-    s = ttp::Storage<4>(static_cast<uint32_t>(128'000));
-    REQUIRE(s.is_inlined());
-    REQUIRE(s.cast<uint32_t>() == 128'000);
-
-    // And then we test that we can store heap-allocated data
-    // when we previously had inlined data.
-    s = ttp::Storage<4>(static_cast<int64_t>(500));
-    REQUIRE(!s.is_inlined());
-    REQUIRE(s.cast<int64_t>() == 500);
-}
-
-TEST_CASE("Tests heap allocated data") {
-    ttp::Storage<4> s(static_cast<int64_t>(123));
-    REQUIRE(!s.is_inlined());
-    REQUIRE(s.cast<int64_t>() == 123);
-
-    auto s2 = std::move(s);
-    REQUIRE(!s2.is_inlined());
-    REQUIRE(s2.cast<int64_t>() == 123);
-
-    s = ttp::Storage<4>(static_cast<int64_t>(128'000));
-    REQUIRE(!s.is_inlined());
-    REQUIRE(s.cast<uint32_t>() == 128'000);
-
-    // And then we test that we can store inlined data
-    // when we previously had heap-allocated data.
-    s = ttp::Storage<4>(static_cast<int32_t>(500));
-    REQUIRE(s.is_inlined());
-    REQUIRE(s.cast<int32_t>() == 500);
-}
 
 std::size_t constructor_counter = 0;
 std::size_t move_counter = 0;
@@ -90,7 +53,49 @@ struct S2 {
     std::array<uint8_t, N> data;
 };
 
-TEST_CASE("Tests inlined allocated constructors and destructors") {
+} // namespace
+
+TEST_CASE("Inlined data", "[Storage]") {
+    ttp::Storage<4> s(static_cast<uint32_t>(123));
+    REQUIRE(s.is_inlined());
+    REQUIRE(s.cast<int32_t>() == 123);
+
+    auto s2 = std::move(s);
+    REQUIRE(s2.is_inlined());
+    REQUIRE(s2.cast<int32_t>() == 123);
+
+    s = ttp::Storage<4>(static_cast<uint32_t>(128'000));
+    REQUIRE(s.is_inlined());
+    REQUIRE(s.cast<uint32_t>() == 128'000);
+
+    // And then we test that we can store heap-allocated data
+    // when we previously had inlined data.
+    s = ttp::Storage<4>(static_cast<int64_t>(500));
+    REQUIRE(!s.is_inlined());
+    REQUIRE(s.cast<int64_t>() == 500);
+}
+
+TEST_CASE("Heap allocated data", "[Storage]") {
+    ttp::Storage<4> s(static_cast<int64_t>(123));
+    REQUIRE(!s.is_inlined());
+    REQUIRE(s.cast<int64_t>() == 123);
+
+    auto s2 = std::move(s);
+    REQUIRE(!s2.is_inlined());
+    REQUIRE(s2.cast<int64_t>() == 123);
+
+    s = ttp::Storage<4>(static_cast<int64_t>(128'000));
+    REQUIRE(!s.is_inlined());
+    REQUIRE(s.cast<uint32_t>() == 128'000);
+
+    // And then we test that we can store inlined data
+    // when we previously had heap-allocated data.
+    s = ttp::Storage<4>(static_cast<int32_t>(500));
+    REQUIRE(s.is_inlined());
+    REQUIRE(s.cast<int32_t>() == 500);
+}
+
+TEST_CASE("Inlined allocated constructors and destructors", "[ErasuredType]") {
     constexpr std::size_t M = 8;
     constexpr std::size_t N = 8;
 
@@ -127,7 +132,7 @@ TEST_CASE("Tests inlined allocated constructors and destructors") {
     clear_counters();
 }
 
-TEST_CASE("Tests heap allocated constructors and destructors") {
+TEST_CASE("Heap allocated constructors and destructors", "[ErasuredType]") {
     constexpr std::size_t M = 4;
     constexpr std::size_t N = 8;
 
@@ -164,14 +169,14 @@ TEST_CASE("Tests heap allocated constructors and destructors") {
     clear_counters();
 }
 
-TEST_CASE("Tests trivial lambda") {
+TEST_CASE("Trivial lambda", "[UniqueFunction]") {
     ttp::UniqueFunction<int(int, int)> func = [](int a, int b) { return a * b; };
 
     auto value = func(10, 13);
     REQUIRE(value == 130);
 }
 
-TEST_CASE("Tests non-returning lambda") {
+TEST_CASE("Non-returning lambda", "[UniqueFunction]") {
     int value = 10;
     ttp::UniqueFunction<void(int, int, int&)> func = [](int a, int b, int& value) { value += a * b; };
 
@@ -179,7 +184,19 @@ TEST_CASE("Tests non-returning lambda") {
     REQUIRE(value == 140);
 }
 
-TEST_CASE("Tests move-only types") {
+TEST_CASE("Lambda returning reference", "[UniqueFunction]") {
+    int value = 10;
+    ttp::UniqueFunction<int&(int&, int)> func = [](int& value, int a) -> int& {
+        value += a;
+        return value;
+    };
+
+    int& result = func(value, 15);
+    REQUIRE(&result == &value);
+    REQUIRE(value == 25);
+}
+
+TEST_CASE("Move-only types", "[UniqueFunction]") {
     auto a = std::make_unique<int>(10);
     ttp::UniqueFunction<std::unique_ptr<int>(std::unique_ptr<int>, int)> func =
         [a = std::move(a)](std::unique_ptr<int> b, int c) {
@@ -191,7 +208,7 @@ TEST_CASE("Tests move-only types") {
     REQUIRE(*value == 122);
 }
 
-TEST_CASE("Tests capturing lambda") {
+TEST_CASE("Capturing lambda", "[UniqueFunction]") {
     int value = 10;
     ttp::UniqueFunction<void(int, int)> func1 = [&value](int a, int b) { value += a + b; };
 
@@ -206,3 +223,15 @@ TEST_CASE("Tests capturing lambda") {
     REQUIRE(func2() == 36);
     REQUIRE(value == 33);
 }
+
+TEST_CASE("Foo", "[UniqueFunction]") {
+    auto func = [](std::unique_ptr<int> a, int b) -> int { return (*a) * b; };
+
+    ttp::UniqueFunction<int()> task = [func = std::move(func), arg1 = std::make_unique<int>(22),
+                                       arg2 = 33]() mutable -> int {
+        return std::invoke(std::move(func), std::move(arg1), std::move(arg2));
+    };
+
+    REQUIRE(task() == 33 * 22);
+}
+// :TODO Tests for member functions and free functions.
