@@ -150,7 +150,6 @@ Tests are written with [Catch2](https://github.com/catchorg/Catch2), and the ful
 * Documentation.
 * Add flag for waiting in the destructor.
 * Implement `TaskGroup` for easily waiting on a group of tasks/futures at a time.
-* Implement `Task` from `std::function` and `std::promise`, instead of wrapping `std::packaged_task`.
 * Refactor `Task` to be reusable.
 * Maybe lower requirement to C++17 (remove uses of `requires`).
 * Add proper support for exceptions.
