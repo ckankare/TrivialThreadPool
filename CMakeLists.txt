@@ -16,7 +16,7 @@ target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_20)
 option(BUILD_TESTING "Build tests" OFF)
 if(BUILD_TESTING)
 
-    set(SANITAZE "thread" CACHE STRING "Specify -DSANITAZE=[address|thread|undefined|leak|memory]")
+    set(SANITAZE "thread" CACHE STRING "Specify -DSANITAZE=[address|thread|undefined|leak]")
 
     target_compile_options(${PROJECT_NAME}
         INTERFACE

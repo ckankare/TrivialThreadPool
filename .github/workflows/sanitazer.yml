@@ -14,7 +14,7 @@ jobs:
       matrix:
         build_type: ["Sanitaze"]
         compiler: ["g++-10"]
-        sanitazer: ["address", "thread", "undefined", "leak", "memory"]
+        sanitazer: ["address", "thread", "undefined", "leak"]
     steps:
       - name: Install dependencies
         run: ${{ env.APT_COMMAND }}
