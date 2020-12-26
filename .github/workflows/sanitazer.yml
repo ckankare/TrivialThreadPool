@@ -1,0 +1,37 @@
+name: Sanitazers
+env:
+  APT_COMMAND: "sudo apt-get update && sudo apt-get install gcovr g++-10" # clang++-11
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  sanitazers:
+    name: "Sanitazers"
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        build_type: ["Sanitaze"]
+        compiler: ["g++-10"]
+        sanitazer: ["address", "thread", "undefined", "leak", "memory"]
+    steps:
+      - name: Install dependencies
+        run: ${{ env.APT_COMMAND }}
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Configure
+        run: |
+          mkdir build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DSANITAZE=${{ matrix.sanitazer }} -DBUILD_TESTING=ON -DCMAKE_CXX_COMPILER=/usr/bin/${{ matrix.compiler }} ..
+      - name: Build tests
+        run: |
+          cd build
+          cmake --build . --target unit_tests
+      - name: Run tests
+        run: ./build/test/unit_tests

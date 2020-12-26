@@ -23,7 +23,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake -DCMAKE_BUILD_TYPE=matrix.build_type -DBUILD_TESTING=ON -DCMAKE_CXX_COMPILER=/usr/bin/${{ matrix.compiler }} ..
+          cmake -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DBUILD_TESTING=ON -DCMAKE_CXX_COMPILER=/usr/bin/${{ matrix.compiler }} ..
       - name: Build tests
         run: |
           cd build
