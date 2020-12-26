@@ -16,7 +16,7 @@
 namespace ttp {
 
 namespace details {
-    inline constexpr void* aligned_alloc(std::size_t size, std::size_t align) noexcept {
+    inline void* aligned_alloc(std::size_t size, std::size_t align) noexcept {
 #if defined(_WIN32) || defined(__CYGWIN__)
         auto ptr = _aligned_malloc(size, align);
 #else
@@ -25,7 +25,7 @@ namespace details {
         return ptr;
     }
 
-    inline constexpr void aligned_free(void* ptr) noexcept {
+    inline void aligned_free(void* ptr) noexcept {
 #if defined(_WIN32) || defined(__CYGWIN__)
         _aligned_free(ptr);
 #else
