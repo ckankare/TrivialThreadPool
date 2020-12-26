@@ -72,7 +72,7 @@ namespace details {
         std::atomic_flag m_worked_on;
         std::atomic<bool> m_ready;
         std::future<void> m_future;
-        ttp::UniqueFunction<void()> m_task;
+        ttp::SizableUniqueFunction<18, void()> m_task;
     };
 } // namespace details
 

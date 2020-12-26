@@ -39,48 +39,43 @@ template <std::size_t N>
 class Storage {
 public:
     // static_assert(N >= sizeof(void*), "N should be larger than the size of a pointer!");
-    using inline_storage_t = std::aligned_storage_t<N, alignof(std::max_align_t)>;
 
-    static void byte_deleter(std::byte* ptr) { return std::free(ptr); }
+    using inline_storage_t = std::aligned_storage_t<N, alignof(std::max_align_t)>;
+    static constexpr std::size_t inline_alignment = alignof(inline_storage_t);
 
     Storage() = default;
 
-    template <typename T>
-    explicit Storage(T&& data) {
-        void* pointer;
-        if constexpr (sizeof(T) <= N && alignof(T) <= alignof(inline_storage_t)) {
+    Storage(std::size_t size, std::size_t alignment) {
+        // :TODO Allow custom allocator. NOTE Might be a bit tricky, as
+        // std::allocators can't allocate "raw" data...
+        if (size <= N && alignment <= inline_alignment) {
             m_data.template emplace<0>();
-            pointer = &std::get<0>(m_data);
         } else {
-            // :TODO Allow custom allocator. NOTE Might be a bit tricky, as
-            // std::allocators can't allocate "raw" data...
-            pointer = details::aligned_alloc(sizeof(T), alignof(T));
-            m_data.template emplace<1>(Allocation{pointer, sizeof(T)});
+            auto* ptr = details::aligned_alloc(size, alignment);
+            m_data.template emplace<1>(Allocation{ptr, size});
         }
-        new (pointer) T(std::forward<T>(data));
     }
 
     template <typename T>
-    explicit Storage(T& data) {
-        void* pointer;
-        if constexpr (sizeof(T) <= N && alignof(T) <= alignof(inline_storage_t)) {
-            m_data.template emplace<0>();
-            pointer = &std::get<0>(m_data);
-        } else {
-            // :TODO Allow custom allocator. NOTE Might be a bit tricky, as
-            // std::allocators can't allocate "raw" data...
-            pointer = details::aligned_alloc(sizeof(T), alignof(T));
-            m_data.template emplace<1>(Allocation{pointer, sizeof(T)});
-        }
-        new (pointer) T(std::move(data));
+    explicit Storage(T&& data) : Storage(sizeof(T), alignof(T)) {
+        void* ptr = pointer();
+        new (ptr) T(std::forward<T>(data));
+    }
+
+    template <typename T>
+    explicit Storage(T& data) : Storage(sizeof(T), alignof(T)) {
+        void* ptr = pointer();
+        new (ptr) T(std::forward<T>(data));
     }
 
     Storage(const Storage&) = delete;
     Storage& operator=(const Storage&) = delete;
+
     Storage(Storage&& rhs) {
         m_data = std::move(rhs.m_data);
         rhs.m_data.template emplace<0>();
     }
+
     Storage& operator=(Storage&& rhs) {
         this->~Storage();
         m_data = std::move(rhs.m_data);
@@ -216,6 +211,8 @@ public:
 
     bool valid() const { return m_valid; }
 
+    bool inlined() const { return m_storage.is_inlined(); }
+
 private:
     bool m_valid;
     bool m_trivial;
@@ -229,32 +226,49 @@ private:
 };
 
 // :TODO Allow custom allocators?
-template <typename R, typename... Args>
-class UniqueFunction;
+template <std::size_t N, typename R, typename... Args>
+class SizableUniqueFunction;
 
-template <typename R, typename... Args>
-class UniqueFunction<R(Args...)> {
+template <std::size_t N, typename R, typename... Args>
+class SizableUniqueFunction<N, R(Args...)> {
 public:
     using call_t = R (*)(void* instance, Args&&... args);
 
-    UniqueFunction() = default;
+    SizableUniqueFunction() = default;
 
     template <typename F>
-    UniqueFunction(F&& func) : m_type_erasured(std::forward<F>(func)) {
+    SizableUniqueFunction(F&& func) : m_type_erasured(std::forward<F>(func)) {
         m_caller = &details::caller<F, R, Args...>; // :TODO Why can't we take address of std::invoke?
     }
-    UniqueFunction(const UniqueFunction&) = delete;
-    UniqueFunction& operator=(const UniqueFunction&) = delete;
+    SizableUniqueFunction(const SizableUniqueFunction&) = delete;
+    SizableUniqueFunction& operator=(const SizableUniqueFunction&) = delete;
 
-    UniqueFunction(UniqueFunction&&) = default;
-    UniqueFunction& operator=(UniqueFunction&&) = default;
+    SizableUniqueFunction(SizableUniqueFunction&&) = default;
+    SizableUniqueFunction& operator=(SizableUniqueFunction&&) = default;
 
     R operator()(Args&&... args) { return m_caller(m_type_erasured.pointer(), std::forward<Args>(args)...); }
 
     bool valid() const { return m_type_erasured.valid(); }
 
+    bool inlined() const { return m_type_erasured.inlined(); }
+
 private:
-    ErasuredType<sizeof(void*) * 4> m_type_erasured;
+    ErasuredType<sizeof(void*) * N> m_type_erasured;
     call_t m_caller;
 };
+
+template <typename R, typename... Args>
+class UniqueFunction;
+
+constexpr inline std::size_t UniqueFunctionDefaultSize = 4;
+
+template <typename R, typename... Args>
+class UniqueFunction<R(Args...)> : SizableUniqueFunction<UniqueFunctionDefaultSize, R(Args...)> {
+public:
+    using ttp::SizableUniqueFunction<UniqueFunctionDefaultSize, R(Args...)>::SizableUniqueFunction;
+    using ttp::SizableUniqueFunction<UniqueFunctionDefaultSize, R(Args...)>::operator();
+    using ttp::SizableUniqueFunction<UniqueFunctionDefaultSize, R(Args...)>::valid;
+    using ttp::SizableUniqueFunction<UniqueFunctionDefaultSize, R(Args...)>::inlined;
+};
+
 } // namespace ttp
