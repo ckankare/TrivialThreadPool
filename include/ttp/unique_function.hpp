@@ -16,7 +16,7 @@
 namespace ttp {
 
 namespace details {
-    inline void* aligned_alloc(std::size_t size, std::size_t align) {
+    inline constexpr void* aligned_alloc(std::size_t size, std::size_t align) noexcept {
 #if defined(_WIN32) || defined(__CYGWIN__)
         auto ptr = _aligned_malloc(size, align);
 #else
@@ -25,7 +25,7 @@ namespace details {
         return ptr;
     }
 
-    inline void aligned_free(void* ptr) {
+    inline constexpr void aligned_free(void* ptr) noexcept {
 #if defined(_WIN32) || defined(__CYGWIN__)
         _aligned_free(ptr);
 #else
@@ -43,9 +43,9 @@ public:
     using inline_storage_t = std::aligned_storage_t<N, alignof(std::max_align_t)>;
     static constexpr std::size_t inline_alignment = alignof(inline_storage_t);
 
-    Storage() = default;
+    constexpr Storage() = default;
 
-    Storage(std::size_t size, std::size_t alignment) {
+    constexpr Storage(std::size_t size, std::size_t alignment) noexcept {
         // :TODO Allow custom allocator. NOTE Might be a bit tricky, as
         // std::allocators can't allocate "raw" data...
         if (size <= N && alignment <= inline_alignment) {
@@ -57,13 +57,13 @@ public:
     }
 
     template <typename T>
-    explicit Storage(T&& data) : Storage(sizeof(T), alignof(T)) {
+    constexpr explicit Storage(T&& data) noexcept : Storage(sizeof(T), alignof(T)) {
         void* ptr = pointer();
         new (ptr) T(std::forward<T>(data));
     }
 
     template <typename T>
-    explicit Storage(T& data) : Storage(sizeof(T), alignof(T)) {
+    constexpr explicit Storage(T& data) noexcept : Storage(sizeof(T), alignof(T)) {
         void* ptr = pointer();
         new (ptr) T(std::forward<T>(data));
     }
@@ -71,12 +71,12 @@ public:
     Storage(const Storage&) = delete;
     Storage& operator=(const Storage&) = delete;
 
-    Storage(Storage&& rhs) {
+    Storage(Storage&& rhs) noexcept {
         m_data = std::move(rhs.m_data);
         rhs.m_data.template emplace<0>();
     }
 
-    Storage& operator=(Storage&& rhs) {
+    Storage& operator=(Storage&& rhs) noexcept {
         this->~Storage();
         m_data = std::move(rhs.m_data);
         rhs.m_data.template emplace<0>();
@@ -84,7 +84,7 @@ public:
         return *this;
     }
 
-    ~Storage() {
+    ~Storage() noexcept {
         if (m_data.index() == 1) {
             details::aligned_free(std::get<1>(m_data).ptr);
         }
@@ -92,7 +92,7 @@ public:
 
     bool is_inlined() const { return m_data.index() == 0; }
 
-    void* pointer() {
+    void* pointer() noexcept {
         if (m_data.index() == 0) {
             return &std::get<0>(m_data);
         } else {
@@ -100,7 +100,7 @@ public:
         }
     }
 
-    const void* pointer() const {
+    const void* pointer() const noexcept {
         if (m_data.index() == 0) {
             return &std::get<0>(m_data);
         } else {
@@ -109,12 +109,12 @@ public:
     }
 
     template <typename T>
-    T& cast() {
+    T& cast() noexcept {
         return *reinterpret_cast<T*>(pointer());
     }
 
     template <typename T>
-    const T& cast() const {
+    const T& cast() const noexcept {
         return *reinterpret_cast<const T*>(pointer());
     }
 
@@ -128,12 +128,12 @@ private:
 
 namespace details {
     template <typename T>
-    static void mover(void* lhs, void* rhs) {
+    static void mover(void* lhs, void* rhs) noexcept {
         new (lhs) T(std::move(*reinterpret_cast<T*>(rhs)));
     }
 
     template <typename T>
-    static void destroyer(void* instance) {
+    static void destroyer(void* instance) noexcept {
         reinterpret_cast<T*>(instance)->~T();
     }
 
@@ -150,9 +150,10 @@ namespace details {
 template <std::size_t N>
 class ErasuredType {
 public:
-    ErasuredType() : m_valid(false) {}
+    constexpr ErasuredType() : m_valid(false) {}
+
     template <typename T>
-    explicit ErasuredType(T&& data) : m_valid(true), m_storage(std::forward<T>(data)) {
+    constexpr explicit ErasuredType(T&& data) noexcept : m_valid(true), m_storage(std::forward<T>(data)) {
         m_mover = &details::mover<std::decay_t<T>>;
         m_destroyer = &details::destroyer<std::decay_t<T>>;
     }
@@ -160,12 +161,12 @@ public:
     ErasuredType(const ErasuredType&) = delete;
     ErasuredType& operator=(const ErasuredType&) = delete;
 
-    ErasuredType(ErasuredType&& rhs) {
+    ErasuredType(ErasuredType&& rhs) noexcept {
         m_valid = false;
         *this = std::move(rhs);
     }
 
-    ErasuredType& operator=(ErasuredType&& rhs) {
+    ErasuredType& operator=(ErasuredType&& rhs) noexcept {
         if (m_valid) {
             m_destroyer(m_storage.pointer());
             m_valid = false;
@@ -189,19 +190,19 @@ public:
         return *this;
     }
 
-    ~ErasuredType() {
+    ~ErasuredType() noexcept {
         if (m_valid) {
             m_destroyer(m_storage.pointer());
         }
     }
 
     template <typename T>
-    T& cast() {
+    T& cast() noexcept {
         return m_storage.template cast<T>();
     }
 
     template <typename T>
-    const T& cast() const {
+    const T& cast() const noexcept {
         return m_storage.template cast<T>();
     }
 
@@ -234,10 +235,10 @@ class SizableUniqueFunction<N, R(Args...)> {
 public:
     using call_t = R (*)(void* instance, Args&&... args);
 
-    SizableUniqueFunction() = default;
+    constexpr SizableUniqueFunction() = default;
 
     template <typename F>
-    SizableUniqueFunction(F&& func) : m_type_erasured(std::forward<F>(func)) {
+    constexpr SizableUniqueFunction(F&& func) noexcept : m_type_erasured(std::forward<F>(func)) {
         m_caller = &details::caller<F, R, Args...>; // :TODO Why can't we take address of std::invoke?
     }
     SizableUniqueFunction(const SizableUniqueFunction&) = delete;

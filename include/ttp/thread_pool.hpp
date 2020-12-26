@@ -55,7 +55,7 @@ namespace details {
             assert(m_task.valid());
         }
 
-        inline void try_run() {
+        inline void try_run() noexcept {
             if (!m_worked_on.test_and_set()) {
                 assert(m_task.valid());
                 assert(!m_ready);
@@ -64,7 +64,7 @@ namespace details {
             }
         }
 
-        inline void wait() const { m_future.wait(); }
+        inline void wait() const noexcept { m_future.wait(); }
 
         inline bool ready() const { return m_ready; }
 
@@ -85,15 +85,15 @@ public:
     Future(const Future&) = delete;
     Future& operator=(const Future&) = delete;
 
-    ~Future() = default;
+    ~Future() noexcept = default;
 
-    void get() requires std::is_same_v<T, void> {
+    void get() noexcept requires std::is_same_v<T, void> {
         m_task->try_run();
         assert(m_future.valid());
         m_future.get();
     }
 
-    [[nodiscard]] T get() {
+    [[nodiscard]] T get() noexcept {
         m_task->try_run();
         assert(m_future.valid());
         return m_future.get();
@@ -110,7 +110,7 @@ private:
 
 class ThreadPool {
 public:
-    ThreadPool(std::size_t pool_size) : m_pool_size(pool_size) {
+    ThreadPool(std::size_t pool_size) noexcept : m_pool_size(pool_size) {
         m_workers.reserve(m_pool_size);
         m_ongoing = 0u;
         m_quit = false;
@@ -153,7 +153,7 @@ public:
         static_assert(std::is_invocable_v<F, Args...>, "Couldn't deduce function");
     }
 
-    inline void wait(Wait how) {
+    inline void wait(Wait how) noexcept {
         if (how == Wait::Async) {
             while (true) {
                 std::unique_lock<std::mutex> lock(m_task_mutex);
@@ -175,8 +175,8 @@ public:
         m_complete_condition.wait(lock, [this]() { return m_ongoing == 0; });
     }
 
-    inline bool is_working() const { return m_ongoing > 0 || tasks() > 0; }
-    inline std::size_t tasks() const {
+    inline bool is_working() const noexcept { return m_ongoing > 0 || tasks() > 0; }
+    inline std::size_t tasks() const noexcept {
         std::lock_guard<std::mutex> lock(m_task_mutex);
         return m_tasks.size();
     }
@@ -184,7 +184,7 @@ public:
     inline std::size_t hardware_cores() const { return std::thread::hardware_concurrency(); }
 
 private:
-    inline void do_work() {
+    inline void do_work() noexcept {
         std::unique_lock<std::mutex> lock(m_task_mutex);
         while (true) {
             m_work_condition.wait(lock, [this]() { return m_quit || !m_tasks.empty(); });
