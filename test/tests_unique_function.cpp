@@ -224,7 +224,7 @@ TEST_CASE("Capturing lambda", "[UniqueFunction]") {
     REQUIRE(value == 33);
 }
 
-TEST_CASE("Foo", "[UniqueFunction]") {
+TEST_CASE("Moved captured arguments", "[UniqueFunction]") {
     auto func = [](std::unique_ptr<int> a, int b) -> int { return (*a) * b; };
 
     ttp::UniqueFunction<int()> task = [func = std::move(func), arg1 = std::make_unique<int>(22),
@@ -233,5 +233,10 @@ TEST_CASE("Foo", "[UniqueFunction]") {
     };
 
     REQUIRE(task() == 33 * 22);
+}
+
+TEST_CASE("Throwing exception", "[UniqueFunction]") {
+    ttp::UniqueFunction<void()> func = []() { throw std::logic_error("Foo"); };
+    REQUIRE_THROWS_AS(func(), std::logic_error);
 }
 // :TODO Tests for member functions and free functions.

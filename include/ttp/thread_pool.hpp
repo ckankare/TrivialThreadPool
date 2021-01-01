@@ -40,14 +40,17 @@ namespace details {
             std::promise<void> task_barrier;
             m_future = task_barrier.get_future();
 
-            // :TODO, Exceptions?
             m_task = [task = std::move(task), promise = std::move(promise),
-                      task_barrier = std::move(task_barrier)]() mutable {
-                if constexpr (std::is_same_v<result_t, void>) {
-                    task();
-                    promise.set_value();
-                } else {
-                    promise.set_value(task());
+                      task_barrier = std::move(task_barrier)]() mutable noexcept {
+                try {
+                    if constexpr (std::is_same_v<result_t, void>) {
+                        task();
+                        promise.set_value();
+                    } else {
+                        promise.set_value(task());
+                    }
+                } catch (...) {
+                    promise.set_exception(std::current_exception());
                 }
                 task_barrier.set_value();
             };
@@ -87,13 +90,15 @@ public:
 
     ~Future() noexcept = default;
 
-    void get() noexcept requires std::is_same_v<T, void> {
+    inline void wait() const noexcept { m_future.wait(); }
+
+    void get() requires std::is_same_v<T, void> {
         m_task->try_run();
         assert(m_future.valid());
         m_future.get();
     }
 
-    [[nodiscard]] T get() noexcept {
+    [[nodiscard]] T get() {
         m_task->try_run();
         assert(m_future.valid());
         return m_future.get();

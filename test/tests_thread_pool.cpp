@@ -186,3 +186,10 @@ TEST_CASE("Nested async tasks") {
         REQUIRE(result[i] == static_cast<int>(i % 5));
     }
 }
+
+TEST_CASE("Exceptions") {
+    ttp::ThreadPool pool(10);
+    ttp::Future<void> f = pool.async([]() { throw std::logic_error("Foo"); });
+    REQUIRE_NOTHROW(pool.wait(ttp::Wait::Async));
+    REQUIRE_THROWS_AS(f.get(), std::logic_error);
+}
