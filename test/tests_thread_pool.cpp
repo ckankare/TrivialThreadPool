@@ -187,9 +187,15 @@ TEST_CASE("Nested async tasks") {
     }
 }
 
-TEST_CASE("Exceptions") {
+TEST_CASE("Exceptions", "[ThreadPool]") {
     ttp::ThreadPool pool(10);
     ttp::Future<void> f = pool.async([]() { throw std::logic_error("Foo"); });
     REQUIRE_NOTHROW(pool.wait(ttp::Wait::Async));
     REQUIRE_THROWS_AS(f.get(), std::logic_error);
+}
+
+TEST_CASE("Empty task group", "[TaskGroup]") {
+    ttp::TaskGroup group;
+    REQUIRE_NOTHROW(group.wait(ttp::Wait::Async));
+    REQUIRE_NOTHROW(group.wait(ttp::Wait::Sync));
 }

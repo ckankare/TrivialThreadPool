@@ -220,4 +220,27 @@ private:
     mutable std::mutex m_task_mutex;
 };
 
+class TaskGroup {
+public:
+    template <typename T>
+    void add(Future<T>& future) noexcept {
+        add(future.m_task);
+    }
+
+    inline void add(std::shared_ptr<ttp::details::Task> task) noexcept { m_tasks.emplace_back(std::move(task)); }
+
+    inline void wait(Wait how) noexcept {
+        if (how == Wait::Async) {
+            for (auto& task : m_tasks) {
+                task->try_run();
+            }
+        }
+        for (auto& task : m_tasks) {
+            task->wait();
+        }
+    }
+
+private:
+    std::vector<std::shared_ptr<details::Task>> m_tasks;
+};
 } // namespace ttp
