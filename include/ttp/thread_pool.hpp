@@ -133,29 +133,33 @@ public:
     }
 
     template <typename F, typename T, typename... Args>
-    auto async(F&& func, T& object, Args&&... args) -> Future<typename std::invoke_result_t<F, T*, Args...>> {
-        return async(std::forward<F>(func), &object, std::forward<Args>(args)...);
+    requires(std::is_invocable_v<F, T*, Args...>&& std::is_same_v<std::invoke_result_t<F, T*, Args...>,
+                                                                  void>) auto async(F&& func, T& object, Args&&... args)
+        -> Future<std::invoke_result_t<F, T*, Args...>> {
+        return async_impl(std::forward<F>(func), &object, std::forward<Args>(args)...);
+    }
+
+    template <typename F, typename T, typename... Args>
+    requires(std::is_invocable_v<F, T*, Args...> && !std::is_same_v<std::invoke_result_t<F, T*, Args...>, void>)
+        [[nodiscard]] auto async(F&& func, T& object, Args&&... args) -> Future<std::invoke_result_t<F, T*, Args...>> {
+        return async_impl(std::forward<F>(func), &object, std::forward<Args>(args)...);
     }
 
     template <typename F, typename... Args>
-    requires(std::is_invocable_v<F, Args...>) auto async(F&& func, Args&&... args)
-        -> Future<std::invoke_result_t<F, Args...>> {
-        using result_t = std::invoke_result_t<F, Args...>;
-        std::future<result_t> future;
-        auto wrapped_task = std::make_shared<details::Task>(future, std::forward<F>(func), std::forward<Args>(args)...);
-        {
-            std::lock_guard<std::mutex> lock(m_task_mutex);
+    requires(std::is_invocable_v<F, Args...>&& std::is_same_v<std::invoke_result_t<F, Args...>, void>) auto async(
+        F&& func, Args&&... args) -> Future<std::invoke_result_t<F, Args...>> {
+        return async_impl(std::forward<F>(func), std::forward<Args>(args)...);
+    }
 
-            m_tasks.push(wrapped_task);
-        }
-        m_work_condition.notify_one();
-        auto wrapped_future = Future<result_t>(wrapped_task, std::move(future));
-        return wrapped_future;
+    template <typename F, typename... Args>
+    requires(std::is_invocable_v<F, Args...> && !std::is_same_v<std::invoke_result_t<F, Args...>, void>)
+        [[nodiscard]] auto async(F&& func, Args&&... args) -> Future<std::invoke_result_t<F, Args...>> {
+        return async_impl(std::forward<F>(func), std::forward<Args>(args)...);
     }
 
     template <typename F, typename... Args>
     auto async([[maybe_unused]] F&& func, [[maybe_unused]] Args&&... args) {
-        static_assert(std::is_invocable_v<F, Args...>, "Couldn't deduce function");
+        static_assert(std::is_invocable_v<F, Args...>, "Couldn't deduce function properly");
     }
 
     inline void wait(Wait how) noexcept {
@@ -189,6 +193,24 @@ public:
     inline std::size_t hardware_cores() const { return std::thread::hardware_concurrency(); }
 
 private:
+    template <typename F, typename... Args>
+    requires(std::is_invocable_v<F, Args...>) auto async_impl(F&& func, Args&&... args)
+        -> Future<std::invoke_result_t<F, Args...>> {
+        // We have the actual implementation as private, as we want to mark functions with
+        // [[nodiscard]].
+        using result_t = std::invoke_result_t<F, Args...>;
+        std::future<result_t> future;
+        auto wrapped_task = std::make_shared<details::Task>(future, std::forward<F>(func), std::forward<Args>(args)...);
+        {
+            std::lock_guard<std::mutex> lock(m_task_mutex);
+
+            m_tasks.push(wrapped_task);
+        }
+        m_work_condition.notify_one();
+        auto wrapped_future = Future<result_t>(wrapped_task, std::move(future));
+        return wrapped_future;
+    }
+
     inline void do_work() noexcept {
         std::unique_lock<std::mutex> lock(m_task_mutex);
         while (true) {
